@@ -1,42 +1,26 @@
-import { MongoClient } from 'mongodb';
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const uri = process.env.MONGO_URI || '';
-const options = {};
+const uri = process.env.MONGO_URI || "";
 
-let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
-
-if (!process.env.MONGO_URI) {
-    throw new Error('Please add your Mongo URI to .env.local');
+if (!uri) {
+  throw new Error("Please add your Mongo URI to .env.local");
 }
 
-if (process.env.NODE_ENV === 'development') {
-    // In development mode, use a global variable so the client is not constantly reinitialized.
-    if (!global._mongoClientPromise) {
-        client = new MongoClient(uri, options);
-        global._mongoClientPromise = client.connect();
-    }
-    clientPromise = global._mongoClientPromise;
-} else {
-    // In production mode, it's best to not use a global variable.
-    client = new MongoClient(uri, options);
-    clientPromise = client.connect();
-}
+let isConnected = false;
 
-// Function to connect to MongoDB using Mongoose
-const connectDB = async () => {
-    if (mongoose.connections[0].readyState) return;
+export const connectDB = async () => {
+  if (isConnected) return;
 
-    try {
-        await mongoose.connect(uri);
-        console.log('MongoDB Connected');
-    } catch (error) {
-        console.error('MongoDB connection error:', error);
-        throw new Error('MongoDB connection failed');
-    }
+  try {
+    const conn = await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 20000, // 20s
+      ssl: true,
+      tlsAllowInvalidCertificates: false,
+    });
+    isConnected = !!conn.connections[0].readyState;
+    console.log("✅ MongoDB Connected");
+  } catch (error) {
+    console.error("❌ MongoDB connection error:", error);
+    throw new Error("MongoDB connection failed");
+  }
 };
-
-// Export a module-scoped MongoClient promise. By doing this in a separate
-// module, the client can be shared across functions.
-export { clientPromise, connectDB };
